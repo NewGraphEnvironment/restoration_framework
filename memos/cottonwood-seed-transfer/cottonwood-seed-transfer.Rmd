@@ -7,6 +7,7 @@ output:
     theme: simplex
     toc: true
     toc_float: true
+    self_contained: true
 bibliography: "`r rbbt::bbt_write_bib('references.bib', overwrite = TRUE)`"
 biblio-style: apalike
 link-citations: true
@@ -14,6 +15,286 @@ link-citations: true
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r packages, include=FALSE}
+library(sf)
+library(mapgl)
+library(DBI)
+library(RPostgres)
+library(dplyr)
+library(bcdata)
+library(base64enc)
+```
+
+```{r db-connect, include=FALSE}
+conn <- dbConnect(
+  RPostgres::Postgres(),
+  host = "localhost",
+  port = 63333,
+  dbname = "bcfishpass",
+  user = "newgraph"
+)
+```
+
+```{r data-bbox, include=FALSE}
+# Tighter bbox: PG to Mackenzie to Smithers — just what we need
+# ~122-127W, 53.5-56N
+bbox_wgs <- st_bbox(c(xmin = -127, ymin = 53.5, xmax = -122, ymax = 56), crs = 4326)
+bbox_poly <- st_as_sfc(bbox_wgs)
+bbox_3005 <- st_transform(bbox_poly, 3005)
+```
+
+```{r data-bec, include=FALSE}
+# BEC zones from BC Data Catalogue — aggressive simplification for file size
+# Dissolve BEC by zone to minimize geometry — subzone detail available on click
+bec <- bcdc_query_geodata("f358a53b-ffde-4830-a325-a5a03ff672c3") |>
+  filter(INTERSECTS(bbox_3005)) |>
+  select(ZONE) |>
+  collect() |>
+  st_transform(4326) |>
+  st_make_valid() |>
+  st_intersection(bbox_poly) |>
+  group_by(ZONE) |>
+  summarise(geometry = st_union(geometry), .groups = "drop") |>
+  st_simplify(dTolerance = 0.05, preserveTopology = TRUE)
+```
+
+```{r data-rivers, include=FALSE}
+# River polygons (wide channels) — clipped to bbox, simplified
+rivers_poly <- st_read(
+  conn,
+  query = "
+    SELECT gnis_name_1 as name,
+           ST_Transform(ST_Simplify(
+             ST_Intersection(geom, ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)),
+             500), 4326) as geom
+    FROM whse_basemapping.fwa_rivers_poly
+    WHERE gnis_name_1 IN (
+      'Nechako River', 'Fraser River', 'Skeena River',
+      'Bulkley River', 'Stuart River'
+    )
+    AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005))
+  "
+)
+
+# Stream network lines — order >= 6 only, clipped, simplified
+streams <- st_read(
+  conn,
+  query = "
+    SELECT gnis_name as name, stream_order,
+           ST_Transform(ST_Simplify(geom, 1000), 4326) as geom
+    FROM whse_basemapping.fwa_stream_networks_sp
+    WHERE stream_order >= 7
+      AND ST_Intersects(
+        geom,
+        ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)
+      )
+  "
+)
+```
+
+```{r data-towns, include=FALSE}
+# Towns from BC Geographical Names
+towns <- st_read(
+  conn,
+  query = "
+    SELECT geographical_name as name, feature_type,
+           ST_Transform(geom, 4326) as geom
+    FROM whse_basemapping.gns_geographical_names_sp
+    WHERE geographical_name IN (
+      'Prince George', 'Mackenzie', 'Vanderhoof',
+      'Burns Lake', 'Houston', 'Smithers', 'Fort St. James'
+    )
+    AND feature_type IN (
+      'City', 'Town', 'Village (1)',
+      'District Municipality (1)', 'District Municipality'
+    )
+  "
+)
+```
+
+```{r data-dam, include=FALSE}
+# Kenney Dam from bcfishpass dams table
+kenney_dam <- st_read(
+  conn,
+  query = "
+    SELECT dam_name_en as name, dam_use, owner,
+           ST_Transform(geom, 4326) as geom
+    FROM bcfishpass.dams
+    WHERE dam_name_en = 'Kenney Dam'
+  "
+)
+```
+
+```{r data-lakes, include=FALSE}
+# Major lakes — clipped to bbox, simplified, only large ones
+lakes <- st_read(
+  conn,
+  query = "
+    SELECT gnis_name_1 as name,
+           ST_Transform(ST_Simplify(geom, 1000), 4326) as geom,
+           area_ha
+    FROM whse_basemapping.fwa_lakes_poly
+    WHERE ST_Intersects(
+        geom,
+        ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)
+      )
+      AND area_ha > 2000
+  "
+)
+```
+
+```{r db-disconnect, include=FALSE}
+dbDisconnect(conn)
+```
+
+```{r map-study-area, fig.cap="Study area showing the Nechako River source region (between Prince George and Kenney Dam) and proposed transfer destinations in the Mackenzie and Skeena basins. BEC zones are shown as semi-transparent fills. Data: BC Freshwater Atlas, BC Geographical Names, CABD dams, BEC Map (BC Data Catalogue).", fig.height=7}
+# BEC zone colors — use a muted palette by zone
+bec_colors <- c(
+  "SBS" = "#8fbc8f",   # dark sea green
+  "ESSF" = "#b0c4de",  # light steel blue
+  "ICH" = "#deb887",   # burlywood
+  "BWBS" = "#d8bfd8",  # thistle
+  "CWH" = "#98fb98",   # pale green
+  "MS" = "#f0e68c",    # khaki
+  "SBPS" = "#c4d4a0",  # sage
+  "SWB" = "#e6e6fa",   # lavender
+  "AT" = "#f5f5dc",    # beige
+  "MH" = "#a8d8a8",    # soft green
+  "BG" = "#e8d8a0"     # soft tan
+)
+
+# Build match expression for BEC zone fill colors
+bec_zones <- unique(bec$ZONE)
+bec_expr <- c(list("match", list("get", "ZONE")))
+for (z in bec_zones) {
+  col <- ifelse(z %in% names(bec_colors), bec_colors[[z]], "#cccccc")
+  bec_expr <- c(bec_expr, list(z, col))
+}
+bec_expr <- c(bec_expr, list("#cccccc"))
+
+# Named streams for labels (order >= 7, major rivers only)
+stream_labels <- streams |>
+  filter(!is.na(name) & stream_order >= 7) |>
+  group_by(name) |>
+  summarise(geom = st_union(geom), .groups = "drop") |>
+  st_point_on_surface()
+
+maplibre(
+  style = carto_style("positron"),
+  bounds = c(-127, 53.5, -122, 56)
+) |>
+  # BEC zones
+  add_fill_layer(
+    id = "bec-zones",
+    source = bec,
+    fill_color = bec_expr,
+    fill_opacity = 0.25,
+    popup = "ZONE"
+  ) |>
+  add_line_layer(
+    id = "bec-borders",
+    source = bec,
+    line_color = "#888888",
+    line_width = 0.5,
+    line_opacity = 0.4
+  ) |>
+  # Lakes
+  add_fill_layer(
+    id = "lakes",
+    source = lakes,
+    fill_color = "#c6ddf0",
+    fill_opacity = 0.7
+  ) |>
+  # River polygons (wide channels)
+  add_fill_layer(
+    id = "rivers-poly",
+    source = rivers_poly,
+    fill_color = "#7ba7cc",
+    fill_opacity = 0.7
+  ) |>
+  # Stream network lines
+  add_line_layer(
+    id = "streams",
+    source = streams,
+    line_color = "#7ba7cc",
+    line_width = interpolate(
+      column = "stream_order",
+      values = c(5, 9),
+      stops = c(0.5, 2.5)
+    ),
+    line_opacity = 0.6
+  ) |>
+  # River labels
+  add_symbol_layer(
+    id = "river-labels",
+    source = stream_labels,
+    text_field = get_column("name"),
+    text_size = 11,
+    text_color = "#1a5276",
+    text_halo_color = "white",
+    text_halo_width = 1.5,
+    text_font = list("Open Sans Italic"),
+    text_allow_overlap = FALSE
+  ) |>
+  # Towns
+  add_circle_layer(
+    id = "towns",
+    source = towns,
+    circle_radius = 5,
+    circle_color = "#2c3e50",
+    circle_stroke_color = "white",
+    circle_stroke_width = 1.5
+  ) |>
+  add_symbol_layer(
+    id = "town-labels",
+    source = towns,
+    text_field = get_column("name"),
+    text_size = 12,
+    text_color = "#2c3e50",
+    text_halo_color = "white",
+    text_halo_width = 1.5,
+    text_font = list("Open Sans Bold"),
+    text_offset = c(0, 1.2),
+    text_allow_overlap = FALSE
+  ) |>
+  # Kenney Dam
+  add_circle_layer(
+    id = "kenney-dam",
+    source = kenney_dam,
+    circle_radius = 7,
+    circle_color = "#c0392b",
+    circle_stroke_color = "white",
+    circle_stroke_width = 2
+  ) |>
+  add_symbol_layer(
+    id = "dam-label",
+    source = kenney_dam,
+    text_field = get_column("name"),
+    text_size = 11,
+    text_color = "#c0392b",
+    text_halo_color = "white",
+    text_halo_width = 1.5,
+    text_font = list("Open Sans Bold"),
+    text_offset = c(0, 1.5)
+  ) |>
+  # Scale bar
+  add_scale_control(
+    position = "bottom-left",
+    unit = "metric"
+  ) |>
+  # Navigation
+  add_navigation_control(position = "top-right") |>
+  # New Graph logo — upper left as north arrow stand-in
+  add_control(
+    html = paste0(
+      '<img src="data:image/png;base64,',
+      base64enc::base64encode("../../fig/logo_newgraph/BLACK/PNG/nge-icon_black.png"),
+      '" style="height: 45px; opacity: 0.85;">'
+    ),
+    position = "top-left"
+  )
 ```
 
 # Question
