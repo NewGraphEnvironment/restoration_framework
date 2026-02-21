@@ -10,8 +10,16 @@ output:
     self_contained: true
 bibliography: "`r rbbt::bbt_write_bib('references.bib', overwrite = TRUE)`"
 biblio-style: apalike
-link-citations: true
+link-citations: no
 ---
+
+<style>
+a { color: #333333; }
+a:hover { color: #555555; }
+.tocify a, .tocify .active { color: #000000 !important; }
+.tocify .active a { color: #000000 !important; font-weight: bold; }
+.tocify-header .active { background-color: #e8e8e8 !important; }
+</style>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -38,9 +46,8 @@ conn <- dbConnect(
 ```
 
 ```{r data-bbox, include=FALSE}
-# Tighter bbox: PG to Mackenzie to Smithers — just what we need
-# ~122-127W, 53.5-56N
-bbox_wgs <- st_bbox(c(xmin = -127, ymin = 53.5, xmax = -122, ymax = 56), crs = 4326)
+# Square bbox centred on study area — south enough for Kenney Dam / Fraser Lake
+bbox_wgs <- st_bbox(c(xmin = -127.5, ymin = 53, xmax = -122, ymax = 56.5), crs = 4326)
 bbox_poly <- st_as_sfc(bbox_wgs)
 bbox_3005 <- st_transform(bbox_poly, 3005)
 ```
@@ -57,7 +64,7 @@ bec <- bcdc_query_geodata("f358a53b-ffde-4830-a325-a5a03ff672c3") |>
   st_intersection(bbox_poly) |>
   group_by(ZONE) |>
   summarise(geometry = st_union(geometry), .groups = "drop") |>
-  st_simplify(dTolerance = 0.05, preserveTopology = TRUE)
+  st_simplify(dTolerance = 0.15, preserveTopology = TRUE)
 ```
 
 ```{r data-rivers, include=FALSE}
@@ -67,14 +74,14 @@ rivers_poly <- st_read(
   query = "
     SELECT gnis_name_1 as name,
            ST_Transform(ST_Simplify(
-             ST_Intersection(geom, ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)),
+             ST_Intersection(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)),
              500), 4326) as geom
     FROM whse_basemapping.fwa_rivers_poly
     WHERE gnis_name_1 IN (
       'Nechako River', 'Fraser River', 'Skeena River',
       'Bulkley River', 'Stuart River'
     )
-    AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005))
+    AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005))
   "
 )
 
@@ -88,7 +95,7 @@ streams <- st_read(
     WHERE stream_order >= 7
       AND ST_Intersects(
         geom,
-        ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)
+        ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)
       )
   "
 )
@@ -138,7 +145,7 @@ lakes <- st_read(
     FROM whse_basemapping.fwa_lakes_poly
     WHERE ST_Intersects(
         geom,
-        ST_Transform(ST_MakeEnvelope(-127, 53.5, -122, 56, 4326), 3005)
+        ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)
       )
       AND area_ha > 2000
   "
@@ -183,7 +190,7 @@ stream_labels <- streams |>
 
 maplibre(
   style = carto_style("positron"),
-  bounds = c(-127, 53.5, -122, 56)
+  bounds = c(-127.5, 53, -122, 56.5)
 ) |>
   # BEC zones
   add_fill_layer(
@@ -313,11 +320,23 @@ Both transfers move material 1--2° latitude northward, within the Sub-Boreal Sp
 
 The most important finding for this question is that interior *P. trichocarpa* populations are genetically well-connected, unlike coastal populations where sharp ecotypic breaks exist across short distances. @xie_etal2012Ecotypicmode documented strong ecotypic differentiation among coastal populations in northern BC (Nass, Skeena, and Kitimat drainages), but this pattern reflects isolation in distinct coastal valleys separated by mountain barriers. Interior populations connected by broad river systems — like the Nechako, Fraser, and upper Skeena — show much higher gene flow and more gradual (clinal) trait variation.
 
+Genome resequencing of range-wide samples found no evidence of restricted gene flow among interior BC drainages, with population structure following smooth isolation-by-distance gradients rather than drainage-specific breaks [@slavov_etal2012Genomeresequencing]. A landscape genomics analysis of 498 accessions across 25 drainages confirmed that interior populations are highly admixed with low differentiation — the sharp genetic boundaries documented on the coast do not exist in the interior plateau [@geraldes_etal2014LANDSCAPEGENOMICS].
+
 ## Clinal variation in adaptive traits
 
 Cottonwood shows strong clinal variation in traits that matter for survival at new latitudes. @mckown_etal2014Geographicalenvironmental found that bud set timing, bud flush timing, growth rate, and leaf morphology all vary predictably with latitude across the species' range. These trait shifts are largely driven by photoperiod — specifically the *FLOWERING LOCUS T* genes (*FT1* and *FT2*) — rather than temperature alone.
 
 @evans_etal2019PhenotypicGenomic confirmed that local adaptation in *P. trichocarpa* follows both latitudinal and elevational gradients, with genomic signatures of selection concentrated in genes controlling phenology and cold hardiness.
+
+## Inter-basin gene flow: wind, pollen, and drainage divides
+
+A key consideration for this transfer is that the source (Fraser/Nechako) and destinations (Mackenzie, Skeena) lie in different major river basins. However, multiple lines of evidence indicate that drainage divides in the interior are not barriers to gene flow in cottonwood.
+
+Cottonwood seeds — equipped with cottony trichomes for wind dispersal — can travel up to 30 km under storm conditions [@nathan_etal2002Mechanismslongdistance]. The drainage divides between the Nechako, upper Skeena, and Parsnip/Pack (Mackenzie system) cross low-elevation passes on the interior plateau (~800--1000 m), not alpine barriers, making cross-basin wind dispersal physically plausible. A global analysis of 1,900+ tree populations confirmed that wind-connected populations are more genetically similar, with prevailing wind patterns shaping asymmetric gene flow and diversity gradients [@kling_ackerly2021Globalwind].
+
+Pollen dispersal reinforces this connectivity. Direct paternity analysis in *P. trichocarpa* found pollen immigration rates of 32--54% from outside local populations, demonstrating that a large fraction of successful pollination originates beyond the immediate stand [@slavov_etal2009Extensivepollen]. Hydrochory (water-mediated dispersal) moves seeds downstream within drainages but cannot cross between basins — inter-basin connectivity depends on wind transport of seeds and pollen.
+
+The available genomic evidence suggests that genetic structure in interior cottonwood follows smooth latitudinal gradients rather than drainage-specific breaks. Moving material between the Fraser, Mackenzie, and Skeena basins in the interior plateau appears consistent with natural gene flow patterns.
 
 ## What the clines mean for 1--2° transfers
 
@@ -350,14 +369,7 @@ The broader restoration literature supports "climate-adjusted provenancing" — 
 
 3. **Monitor fall phenology in the first 2--3 years.** The main risk is a slight delay in bud set relative to local genotypes. Watch for frost damage in September--October, particularly at the Mackenzie sites which are the furthest north.
 
-4. **Document the provenance.** Record the collection location along the Nechako (closer to PG vs. closer to Kenny Dam matters for elevation and BEC variant) so outcomes can be tracked and inform future transfers.
-
-
-# Outstanding Questions
-
-- **Exact collection location:** Where along the Nechako were the plugs collected? Closer to Prince George (~575 m elevation, SBSwk1) vs. closer to Kenny Dam (~850 m, SBSdk) could affect the magnitude of the climate mismatch at the receiving sites.
-- **CBST applicability:** Does BC's Climate-Based Seed Transfer system formally apply to restoration plantings, or only to reforestation obligations under the Chief Forester's Standards?
-- **Local material availability:** Are cottonwood cuttings available from riparian areas near the Mackenzie and Skeena planting sites for composite provenancing?
+4. **Document the provenance.** Record the exact collection location along the Nechako — closer to Prince George (~575 m elevation, SBSwk1) vs. closer to Kenny Dam (~850 m, SBSdk) matters because the elevation and BEC variant affect the magnitude of any climate mismatch at the receiving sites. This information is essential for interpreting monitoring results and informing future transfers.
 
 
 # References
