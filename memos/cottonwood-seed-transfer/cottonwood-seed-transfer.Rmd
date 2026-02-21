@@ -1,0 +1,82 @@
+---
+title: "Cottonwood Seed Transfer: Nechako Source to Mackenzie and Skeena Basins"
+author: "Al Irvine, B.Sc., R.P.Bio. — New Graph Environment Ltd."
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  bookdown::html_document2:
+    theme: simplex
+    toc: true
+    toc_float: true
+bibliography: "`r rbbt::bbt_write_bib('references.bib', overwrite = TRUE)`"
+biblio-style: apalike
+link-citations: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Question
+
+Can black cottonwood (*Populus trichocarpa*) plugs collected along the Nechako River — between Prince George and Kenny Dam (~54°N) — be used for riparian restoration at two sites further north?
+
+1. **Mackenzie basin** — 75--150 km north of Prince George (~55--56°N)
+2. **Skeena / Neexdzii Kwah** — 120--150 km north of Kenny Dam (~54.5--55°N)
+
+Both transfers move material 1--2° latitude northward, within the Sub-Boreal Spruce (SBS) biogeoclimatic zone, and within BC's interior where gene flow among cottonwood populations is relatively continuous.
+
+
+# What the Literature Says
+
+## Genetic structure: interior vs. coast
+
+The most important finding for this question is that interior *P. trichocarpa* populations are genetically well-connected, unlike coastal populations where sharp ecotypic breaks exist across short distances. @xie_etal2012Ecotypicmode documented strong ecotypic differentiation among coastal populations in northern BC (Nass, Skeena, and Kitimat drainages), but this pattern reflects isolation in distinct coastal valleys separated by mountain barriers. Interior populations connected by broad river systems — like the Nechako, Fraser, and upper Skeena — show much higher gene flow and more gradual (clinal) trait variation.
+
+## Clinal variation in adaptive traits
+
+Cottonwood shows strong clinal variation in traits that matter for survival at new latitudes. @mckown_etal2014Geographicalenvironmental found that bud set timing, bud flush timing, growth rate, and leaf morphology all vary predictably with latitude across the species' range. These trait shifts are largely driven by photoperiod — specifically the *FLOWERING LOCUS T* genes (*FT1* and *FT2*) — rather than temperature alone.
+
+@evans_etal2019PhenotypicGenomic confirmed that local adaptation in *P. trichocarpa* follows both latitudinal and elevational gradients, with genomic signatures of selection concentrated in genes controlling phenology and cold hardiness.
+
+## What the clines mean for 1--2° transfers
+
+The clinal patterns are gradual within the interior. Moving material 1--2° north means the plugs will encounter:
+
+- **Slightly longer winter nights** — photoperiod at 55--56°N triggers bud set a few days earlier than at 54°N, so Nechako-source trees may set buds slightly later than local genotypes. In practice, this means a small increase in early-frost risk in the first few autumns.
+- **Comparable growing-season temperatures** — within the SBS zone, mean growing-season temperatures are similar across this latitudinal band, especially given that climate warming is shifting thermal regimes northward.
+
+The key question is whether the phenological mismatch is large enough to cause mortality. For a 1--2° shift within the interior, the literature suggests the risk is low — certainly lower than the large mortality events documented for coastal ecotype transfers [@xie_etal2012Ecotypicmode].
+
+
+# BC Regulatory Context
+
+## Climate-Based Seed Transfer (CBST)
+
+BC's seed transfer system has moved from fixed geographic Seed Planning Zones to a climate-based approach that matches seedlots to planting sites by climate variables [@oneill_etal2008Assistedmigration; @oneill_etal2021Seedschange]. Under CBST, the question is whether the climate envelope at the collection site overlaps with the climate envelope at the planting site — and for Nechako-to-Mackenzie or Nechako-to-Skeena, there is substantial overlap within the SBS zone.
+
+However, CBST was designed primarily for **reforestation obligations** under the Chief Forester's Standards for Seed Use. It is less clear whether CBST formally applies to **restoration plantings** outside of timber tenures. In practice, restoration practitioners in BC routinely move riparian material across similar distances without formal seed transfer approvals, but this is a gap in the regulatory framework [@oneill_etal2021Seedschange].
+
+## Seed sourcing for restoration under climate change
+
+The broader restoration literature supports "climate-adjusted provenancing" — intentionally sourcing material from slightly warmer or lower-latitude sites to pre-adapt plantings to anticipated climate conditions [@kramer_etal2015SeedSourcing; @pedrini_etal2022Seedsourcing]. Under this logic, Nechako-source material may actually be *better* suited to future conditions at the northern sites than strictly local genotypes, because the Nechako's current climate approximates the projected future climate at 55--56°N.
+
+
+# Recommendations
+
+1. **The transfer is likely appropriate.** Moving Nechako cottonwood plugs 1--2° north within the interior SBS zone is well within the range of natural gene flow and clinal variation. The genetic risk is low compared to cross-ecotype transfers (e.g., coastal to interior).
+
+2. **Mix provenances where possible.** If local cuttings from the Mackenzie or Skeena sites are available, mixing them with Nechako-source plugs provides a genetic hedge. This composite provenancing approach is increasingly recommended for restoration under climate uncertainty [@kramer_etal2015SeedSourcing; @pedrini_etal2022Seedsourcing].
+
+3. **Monitor fall phenology in the first 2--3 years.** The main risk is a slight delay in bud set relative to local genotypes. Watch for frost damage in September--October, particularly at the Mackenzie sites which are the furthest north.
+
+4. **Document the provenance.** Record the collection location along the Nechako (closer to PG vs. closer to Kenny Dam matters for elevation and BEC variant) so outcomes can be tracked and inform future transfers.
+
+
+# Outstanding Questions
+
+- **Exact collection location:** Where along the Nechako were the plugs collected? Closer to Prince George (~575 m elevation, SBSwk1) vs. closer to Kenny Dam (~850 m, SBSdk) could affect the magnitude of the climate mismatch at the receiving sites.
+- **CBST applicability:** Does BC's Climate-Based Seed Transfer system formally apply to restoration plantings, or only to reforestation obligations under the Chief Forester's Standards?
+- **Local material availability:** Are cottonwood cuttings available from riparian areas near the Mackenzie and Skeena planting sites for composite provenancing?
+
+
+# References

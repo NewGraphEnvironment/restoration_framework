@@ -959,7 +959,7 @@ Three tools, different purposes. Use the right one.
 
 **Citation keys vs item keys:** Citation keys (like `irvine2020ParsnipRiver`) come from Better BibTeX. Item keys (like `K7WALMSY`) are native Zotero. The MCP works with item keys. `/zotero-lookup` bridges citation keys to item data.
 
-**BBT database location:** BBT migrated from `better-bibtex.sqlite` to `better-bibtex.migrated` (Feb 2025+). The old `.sqlite` file is stale — always use `better-bibtex.migrated` for citation key lookups. The `better-bibtex-search.sqlite` is also stale and unrelated.
+**BBT citation key storage:** As of Feb 2025+, BBT stores citation keys as a `citationKey` field directly in `zotero.sqlite` (via Zotero's item data system), not in a separate BBT database. The old `better-bibtex.sqlite` and `better-bibtex.migrated` files are stale and no longer updated. Query citation keys with: `SELECT idv.value FROM items i JOIN itemData id ON i.itemID = id.itemID JOIN itemDataValues idv ON id.valueID = idv.valueID JOIN fields f ON id.fieldID = f.fieldID WHERE f.fieldName = 'citationKey'`.
 
 ## Adding References Workflow
 
