@@ -372,4 +372,8 @@ The broader restoration literature supports "climate-adjusted provenancing" — 
 4. **Document the provenance.** Record the exact collection location along the Nechako — closer to Prince George (~575 m elevation, SBSwk1) vs. closer to Kenny Dam (~850 m, SBSdk) matters because the elevation and BEC variant affect the magnitude of any climate mismatch at the receiving sites. This information is essential for interpreting monitoring results and informing future transfers.
 
 
+# Computational Assistance {.unnumbered}
+
+This memo was assisted by Claude Opus 4.6 (Anthropic), a large language model, for literature search, synthesis, and technical writing. All content was reviewed and verified by Al Irvine, R.P.Bio.
+
 # References
