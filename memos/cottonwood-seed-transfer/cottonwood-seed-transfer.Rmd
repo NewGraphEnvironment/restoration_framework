@@ -4,7 +4,7 @@ author: "Al Irvine, B.Sc., R.P.Bio. — New Graph Environment Ltd."
 date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output:
   bookdown::html_document2:
-    theme: simplex
+    theme: cosmo
     toc: true
     toc_float: true
     self_contained: true
@@ -20,6 +20,8 @@ a:hover { color: #555555; }
 .tocify .active a { color: #000000 !important; font-weight: bold; }
 .tocify-header .active { background-color: #e8e8e8 !important; }
 </style>
+
+*This memo was prepared with assistance from Claude Opus 4.6 (Anthropic) for literature search, synthesis, and technical writing. All content was reviewed and verified by Al Irvine, R.P.Bio.*
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -370,10 +372,5 @@ The broader restoration literature supports "climate-adjusted provenancing" — 
 3. **Monitor fall phenology in the first 2--3 years.** The main risk is a slight delay in bud set relative to local genotypes. Watch for frost damage in September--October, particularly at the Mackenzie sites which are the furthest north.
 
 4. **Document the provenance.** Record the exact collection location along the Nechako — closer to Prince George (~575 m elevation, SBSwk1) vs. closer to Kenny Dam (~850 m, SBSdk) matters because the elevation and BEC variant affect the magnitude of any climate mismatch at the receiving sites. This information is essential for interpreting monitoring results and informing future transfers.
-
-
-# Computational Assistance {.unnumbered}
-
-This memo was assisted by Claude Opus 4.6 (Anthropic), a large language model, for literature search, synthesis, and technical writing. All content was reviewed and verified by Al Irvine, R.P.Bio.
 
 # References
