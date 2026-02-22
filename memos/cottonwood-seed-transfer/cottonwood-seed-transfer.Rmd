@@ -39,12 +39,11 @@ library(gq)
 ```
 
 ```{r registry, include=FALSE}
-# Load NGE canonical styles from gq package
-reg <- gq_registry_read(
-  system.file("registry", "reg_qgis_restoration.json", package = "gq")
-)
+# Load NGE canonical styles from gq package (pre-merged main registry)
+reg <- gq_reg_main()
 lake_style <- gq_mapgl_style(reg$layers$lake)
-stream_label_style <- gq_mapgl_style(reg$layers$stream_labels)
+rivers_style <- gq_mapgl_style(reg$layers$rivers_poly)
+bec_expr <- gq_mapgl_classes(reg$layers$bec_zone)
 ```
 
 ```{r db-connect, include=FALSE}
@@ -169,30 +168,6 @@ dbDisconnect(conn)
 ```
 
 ```{r map-study-area, fig.cap="Study area showing the Nechako River source region (between Prince George and Kenney Dam) and proposed transfer destinations in the Mackenzie and Skeena basins. BEC zones are shown as semi-transparent fills. Data: BC Freshwater Atlas, BC Geographical Names, CABD dams, BEC Map (BC Data Catalogue).", fig.height=7}
-# BEC zone colors — use a muted palette by zone
-bec_colors <- c(
-  "SBS" = "#8fbc8f",   # dark sea green
-  "ESSF" = "#b0c4de",  # light steel blue
-  "ICH" = "#deb887",   # burlywood
-  "BWBS" = "#d8bfd8",  # thistle
-  "CWH" = "#98fb98",   # pale green
-  "MS" = "#f0e68c",    # khaki
-  "SBPS" = "#c4d4a0",  # sage
-  "SWB" = "#e6e6fa",   # lavender
-  "AT" = "#f5f5dc",    # beige
-  "MH" = "#a8d8a8",    # soft green
-  "BG" = "#e8d8a0"     # soft tan
-)
-
-# Build match expression for BEC zone fill colors
-bec_zones <- unique(bec$ZONE)
-bec_expr <- c(list("match", list("get", "ZONE")))
-for (z in bec_zones) {
-  col <- ifelse(z %in% names(bec_colors), bec_colors[[z]], "#cccccc")
-  bec_expr <- c(bec_expr, list(z, col))
-}
-bec_expr <- c(bec_expr, list("#cccccc"))
-
 # Named streams for labels (order >= 7, major rivers only)
 stream_labels <- streams |>
   filter(!is.na(name) & stream_order >= 7) |>
@@ -204,22 +179,22 @@ maplibre(
   style = carto_style("positron"),
   bounds = c(-127.5, 53, -122, 56.5)
 ) |>
-  # BEC zones
+  # BEC zones — classified by ZONE from gq registry
   add_fill_layer(
     id = "bec-zones",
     source = bec,
     fill_color = bec_expr,
-    fill_opacity = 0.25,
+    fill_opacity = reg$layers$bec_zone$classification$classes[[1]]$opacity %||% 0.25,
     popup = "ZONE"
   ) |>
   add_line_layer(
     id = "bec-borders",
     source = bec,
-    line_color = "#888888",
-    line_width = 0.5,
-    line_opacity = 0.4
+    line_color = reg$layers$bec_zone$stroke$color,
+    line_width = reg$layers$bec_zone$stroke$width,
+    line_opacity = reg$layers$bec_zone$stroke$opacity
   ) |>
-  # Lakes — styled from gq registry
+  # Lakes
   add_fill_layer(
     id = "lakes",
     source = lakes,
@@ -230,14 +205,14 @@ maplibre(
   add_fill_layer(
     id = "rivers-poly",
     source = rivers_poly,
-    fill_color = "#7ba7cc",
-    fill_opacity = 0.7
+    fill_color = rivers_style$paint[["fill-color"]],
+    fill_opacity = rivers_style$paint[["fill-opacity"]]
   ) |>
   # Stream network lines
   add_line_layer(
     id = "streams",
     source = streams,
-    line_color = "#7ba7cc",
+    line_color = rivers_style$paint[["fill-color"]],
     line_width = interpolate(
       column = "stream_order",
       values = c(5, 9),
@@ -245,7 +220,7 @@ maplibre(
     ),
     line_opacity = 0.6
   ) |>
-  # River labels — styled from gq registry
+  # River labels
   add_symbol_layer(
     id = "river-labels",
     source = stream_labels,
@@ -261,42 +236,42 @@ maplibre(
   add_circle_layer(
     id = "towns",
     source = towns,
-    circle_radius = 5,
-    circle_color = "#2c3e50",
-    circle_stroke_color = "white",
-    circle_stroke_width = 1.5
+    circle_radius = reg$layers$town$mark$radius,
+    circle_color = reg$layers$town$mark$color,
+    circle_stroke_color = reg$layers$town$mark$stroke_color,
+    circle_stroke_width = reg$layers$town$mark$stroke_width
   ) |>
   add_symbol_layer(
     id = "town-labels",
     source = towns,
     text_field = get_column("name"),
-    text_size = 12,
-    text_color = "#2c3e50",
-    text_halo_color = "white",
-    text_halo_width = 1.5,
-    text_font = list("Open Sans Bold"),
-    text_offset = c(0, 1.2),
+    text_size = reg$layers$town$label$size,
+    text_color = reg$layers$town$label$color,
+    text_halo_color = reg$layers$town$label$halo$color,
+    text_halo_width = reg$layers$town$label$halo$width,
+    text_font = list(reg$layers$town$label$font),
+    text_offset = c(reg$layers$town$label$offset_x, reg$layers$town$label$offset_y),
     text_allow_overlap = FALSE
   ) |>
   # Kenney Dam
   add_circle_layer(
     id = "kenney-dam",
     source = kenney_dam,
-    circle_radius = 7,
-    circle_color = "#c0392b",
-    circle_stroke_color = "white",
-    circle_stroke_width = 2
+    circle_radius = reg$layers$dam$mark$radius,
+    circle_color = reg$layers$dam$mark$color,
+    circle_stroke_color = reg$layers$dam$mark$stroke_color,
+    circle_stroke_width = reg$layers$dam$mark$stroke_width
   ) |>
   add_symbol_layer(
     id = "dam-label",
     source = kenney_dam,
     text_field = get_column("name"),
-    text_size = 11,
-    text_color = "#c0392b",
-    text_halo_color = "white",
-    text_halo_width = 1.5,
-    text_font = list("Open Sans Bold"),
-    text_offset = c(0, 1.5)
+    text_size = reg$layers$dam$label$size,
+    text_color = reg$layers$dam$label$color,
+    text_halo_color = reg$layers$dam$label$halo$color,
+    text_halo_width = reg$layers$dam$label$halo$width,
+    text_font = list(reg$layers$dam$label$font),
+    text_offset = c(reg$layers$dam$label$offset_x, reg$layers$dam$label$offset_y)
   ) |>
   # Scale bar
   add_scale_control(
