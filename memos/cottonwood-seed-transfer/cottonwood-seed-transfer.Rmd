@@ -35,6 +35,16 @@ library(RPostgres)
 library(dplyr)
 library(bcdata)
 library(base64enc)
+library(gq)
+```
+
+```{r registry, include=FALSE}
+# Load NGE canonical styles from gq package
+reg <- gq_registry_read(
+  system.file("registry", "reg_qgis_restoration.json", package = "gq")
+)
+lake_style <- gq_mapgl_style(reg$layers$lake)
+stream_label_style <- gq_mapgl_style(reg$layers$stream_labels)
 ```
 
 ```{r db-connect, include=FALSE}
@@ -209,12 +219,12 @@ maplibre(
     line_width = 0.5,
     line_opacity = 0.4
   ) |>
-  # Lakes
+  # Lakes — styled from gq registry
   add_fill_layer(
     id = "lakes",
     source = lakes,
-    fill_color = "#c6ddf0",
-    fill_opacity = 0.7
+    fill_color = lake_style$paint[["fill-color"]],
+    fill_opacity = lake_style$paint[["fill-opacity"]]
   ) |>
   # River polygons (wide channels)
   add_fill_layer(
@@ -235,15 +245,15 @@ maplibre(
     ),
     line_opacity = 0.6
   ) |>
-  # River labels
+  # River labels — styled from gq registry
   add_symbol_layer(
     id = "river-labels",
     source = stream_labels,
     text_field = get_column("name"),
-    text_size = 11,
-    text_color = "#1a5276",
-    text_halo_color = "white",
-    text_halo_width = 1.5,
+    text_size = reg$layers$stream_labels$label$size,
+    text_color = reg$layers$stream_labels$label$color,
+    text_halo_color = reg$layers$stream_labels$label$halo$color,
+    text_halo_width = reg$layers$stream_labels$label$halo$width,
     text_font = list("Open Sans Italic"),
     text_allow_overlap = FALSE
   ) |>
