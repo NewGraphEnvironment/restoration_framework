@@ -36,6 +36,7 @@ library(DBI)
 library(RPostgres)
 library(dplyr)
 library(bcdata)
+library(bcmaps)
 library(base64enc)
 library(gq)
 ```
@@ -164,6 +165,24 @@ planting_sites <- st_as_sf(
 )
 ```
 
+```{r keymap, include=FALSE}
+# BC province keymap with study area highlighted
+sf_use_s2(FALSE)
+bc <- bc_bound() |> st_transform(3005) |> st_simplify(dTolerance = 5000)
+bbox_poly_3005 <- st_as_sfc(
+  st_bbox(c(xmin = -127.5, ymin = 53, xmax = -122, ymax = 56.5), crs = 4326)
+) |> st_transform(3005)
+
+keymap_path <- tempfile(fileext = ".png")
+png(keymap_path, width = 150, height = 180, bg = "transparent")
+par(mar = c(0, 0, 0, 0))
+plot(st_geometry(bc), col = "#e8e8e8", border = "#999999", lwd = 0.5)
+plot(st_geometry(bbox_poly_3005), col = adjustcolor("#c0392b", alpha.f = 0.35),
+     border = "#c0392b", lwd = 1.5, add = TRUE)
+invisible(dev.off())
+keymap_b64 <- base64encode(keymap_path)
+```
+
 ```{r map-study-area, fig.cap="Study area showing the seed collection zone and proposed planting areas. Data: BC Freshwater Atlas, BC Geographical Names, BEC (BC Data Catalogue).", fig.height=7}
 # Named streams for labels (order >= 7, major rivers only)
 stream_labels <- streams |>
@@ -176,34 +195,27 @@ maplibre(
   style = carto_style("positron"),
   bounds = c(-127.5, 53, -122, 56.5)
 ) |>
-  # BEC zones — classified by ZONE from gq registry
+  # BEC zones — classified by ZONE from gq registry (low opacity tint, no borders)
   add_fill_layer(
     id = "bec-zones",
     source = bec,
     fill_color = bec_expr,
-    fill_opacity = reg$layers$bec_zone$classification$classes[[1]]$opacity %||% 0.25,
+    fill_opacity = 0.15,
     popup = "ZONE"
   ) |>
-  add_line_layer(
-    id = "bec-borders",
-    source = bec,
-    line_color = reg$layers$bec_zone$stroke$color,
-    line_width = reg$layers$bec_zone$stroke$width,
-    line_opacity = reg$layers$bec_zone$stroke$opacity
-  ) |>
-  # Harvest area — Nechako corridor (seed collection zone)
+  # Harvest area — Nechako corridor (seed collection zone, prominent)
   add_fill_layer(
     id = "harvest-area",
     source = harvest_area,
     fill_color = harvest_style$paint[["fill-color"]],
-    fill_opacity = harvest_style$paint[["fill-opacity"]]
+    fill_opacity = 0.4
   ) |>
   add_line_layer(
     id = "harvest-area-border",
     source = harvest_area,
     line_color = reg$layers$harvest_area$stroke$color,
-    line_width = reg$layers$harvest_area$stroke$width,
-    line_opacity = reg$layers$harvest_area$stroke$opacity
+    line_width = 2.5,
+    line_opacity = 0.8
   ) |>
   # Lakes
   add_fill_layer(
@@ -229,21 +241,21 @@ maplibre(
       values = c(5, 9),
       stops = c(0.5, 2.5)
     ),
-    line_opacity = 0.6
+    line_opacity = 0.35
   ) |>
-  # River labels
+  # River labels — muted blue-gray, wider halo
   add_symbol_layer(
     id = "river-labels",
     source = stream_labels,
     text_field = get_column("name"),
-    text_size = reg$layers$stream_labels$label$size,
-    text_color = reg$layers$stream_labels$label$color,
-    text_halo_color = reg$layers$stream_labels$label$halo$color,
-    text_halo_width = reg$layers$stream_labels$label$halo$width,
+    text_size = 10,
+    text_color = "#6b8fa3",
+    text_halo_color = "white",
+    text_halo_width = 1.8,
     text_font = list("Open Sans Italic"),
     text_allow_overlap = FALSE
   ) |>
-  # Towns
+  # Towns — wider halo for readability
   add_circle_layer(
     id = "towns",
     source = towns,
@@ -259,12 +271,12 @@ maplibre(
     text_size = reg$layers$town$label$size,
     text_color = reg$layers$town$label$color,
     text_halo_color = reg$layers$town$label$halo$color,
-    text_halo_width = reg$layers$town$label$halo$width,
+    text_halo_width = 2,
     text_font = list(reg$layers$town$label$font),
     text_offset = c(reg$layers$town$label$offset_x, reg$layers$town$label$offset_y),
     text_allow_overlap = FALSE
   ) |>
-  # Kenney Dam
+  # Kenney Dam — wider halo
   add_circle_layer(
     id = "kenney-dam",
     source = kenney_dam,
@@ -280,29 +292,29 @@ maplibre(
     text_size = reg$layers$dam$label$size,
     text_color = reg$layers$dam$label$color,
     text_halo_color = reg$layers$dam$label$halo$color,
-    text_halo_width = reg$layers$dam$label$halo$width,
+    text_halo_width = 2,
     text_font = list(reg$layers$dam$label$font),
     text_offset = c(reg$layers$dam$label$offset_x, reg$layers$dam$label$offset_y)
   ) |>
-  # Planting areas
+  # Planting areas — larger markers, bolder labels
   add_circle_layer(
     id = "planting-sites",
     source = planting_sites,
-    circle_radius = planting_style$mark$radius,
+    circle_radius = 9,
     circle_color = planting_style$mark$color,
     circle_stroke_color = planting_style$mark$stroke_color,
-    circle_stroke_width = planting_style$mark$stroke_width
+    circle_stroke_width = 2.5
   ) |>
   add_symbol_layer(
     id = "planting-labels",
     source = planting_sites,
     text_field = get_column("name"),
-    text_size = 9,
+    text_size = 11,
     text_color = planting_style$label$color,
     text_halo_color = planting_style$label$halo$color,
-    text_halo_width = 0.8,
+    text_halo_width = 2,
     text_font = list(planting_style$label$font),
-    text_offset = c(0, 1.2),
+    text_offset = c(0, 1.4),
     text_allow_overlap = FALSE
   ) |>
   # Scale bar
@@ -314,12 +326,24 @@ maplibre(
   add_navigation_control(position = "top-right") |>
   # New Graph logo — upper left
   add_control(
+    id = "logo",
     html = paste0(
       '<img src="data:image/png;base64,',
       base64enc::base64encode("../../fig/logo_newgraph/BLACK/PNG/nge-icon_black.png"),
       '" style="height: 45px; opacity: 0.85;">'
     ),
     position = "top-left"
+  ) |>
+  # Keymap — BC province with study area bbox
+  add_control(
+    id = "keymap",
+    html = paste0(
+      '<div style="background: white; border-radius: 4px; padding: 3px; ',
+      'box-shadow: 0 1px 3px rgba(0,0,0,0.3);">',
+      '<img src="data:image/png;base64,', keymap_b64,
+      '" style="display: block; width: 80px; height: auto;">', '</div>'
+    ),
+    position = "bottom-right"
   ) |>
   # Legend — circle for planting first (add=TRUE stacks above), square below
   add_categorical_legend(
