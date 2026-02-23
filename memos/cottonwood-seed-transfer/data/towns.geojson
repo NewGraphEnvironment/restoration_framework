@@ -1,0 +1,14 @@
+{
+"type": "FeatureCollection",
+"name": "towns",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "Burns Lake", "feature_type": "Village (1)" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -125.764444445143667, 54.230277774986284 ] ] } },
+{ "type": "Feature", "properties": { "name": "Fort St. James", "feature_type": "District Municipality (1)" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -124.259166666874165, 54.444444441153657 ] ] } },
+{ "type": "Feature", "properties": { "name": "Mackenzie", "feature_type": "District Municipality (1)" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -123.092777777657588, 55.324444441221438 ] ] } },
+{ "type": "Feature", "properties": { "name": "Prince George", "feature_type": "City" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -122.745277777141851, 53.91305555258139 ] ] } },
+{ "type": "Feature", "properties": { "name": "Smithers", "feature_type": "Town" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -127.176111111496937, 54.779166663819034 ] ] } },
+{ "type": "Feature", "properties": { "name": "Vanderhoof", "feature_type": "District Municipality (1)" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -124.007500000264358, 54.017499997011853 ] ] } },
+{ "type": "Feature", "properties": { "name": "Houston", "feature_type": "District Municipality (1)" }, "geometry": { "type": "MultiPoint", "coordinates": [ [ -126.648333333076351, 54.398333330438021 ] ] } }
+]
+}

@@ -8,6 +8,8 @@ output:
     toc: true
     toc_float: true
     self_contained: true
+params:
+  update_gis: FALSE
 bibliography: "`r rbbt::bbt_write_bib('references.bib', overwrite = TRUE)`"
 biblio-style: apalike
 link-citations: no
@@ -43,29 +45,22 @@ library(gq)
 reg <- gq_reg_main()
 lake_style <- gq_mapgl_style(reg$layers$lake)
 rivers_style <- gq_mapgl_style(reg$layers$rivers_poly)
+harvest_style <- gq_mapgl_style(reg$layers$harvest_area)
+planting_style <- reg$layers$planting_site
 bec_expr <- gq_mapgl_classes(reg$layers$bec_zone)
 ```
 
-```{r db-connect, include=FALSE}
-conn <- dbConnect(
-  RPostgres::Postgres(),
-  host = "localhost",
-  port = 63333,
-  dbname = "bcfishpass",
-  user = "newgraph"
-)
-```
+```{r data-gis-update, include=FALSE, eval=params$update_gis}
+# Fetch spatial data from APIs/database and cache as geojson
+# Re-run with: params = list(update_gis = TRUE)
+dir.create("data", showWarnings = FALSE)
 
-```{r data-bbox, include=FALSE}
-# Square bbox centred on study area — south enough for Kenney Dam / Fraser Lake
+# bbox for all queries
 bbox_wgs <- st_bbox(c(xmin = -127.5, ymin = 53, xmax = -122, ymax = 56.5), crs = 4326)
 bbox_poly <- st_as_sfc(bbox_wgs)
 bbox_3005 <- st_transform(bbox_poly, 3005)
-```
 
-```{r data-bec, include=FALSE}
-# BEC zones from BC Data Catalogue — aggressive simplification for file size
-# Dissolve BEC by zone to minimize geometry — subzone detail available on click
+# BEC zones — BC Data Catalogue (slow API call)
 bec <- bcdc_query_geodata("f358a53b-ffde-4830-a325-a5a03ff672c3") |>
   filter(INTERSECTS(bbox_3005)) |>
   select(ZONE) |>
@@ -76,103 +71,105 @@ bec <- bcdc_query_geodata("f358a53b-ffde-4830-a325-a5a03ff672c3") |>
   group_by(ZONE) |>
   summarise(geometry = st_union(geometry), .groups = "drop") |>
   st_simplify(dTolerance = 0.15, preserveTopology = TRUE)
-```
+st_write(bec, "data/bec.geojson", delete_dsn = TRUE)
 
-```{r data-rivers, include=FALSE}
-# River polygons (wide channels) — clipped to bbox, simplified
-rivers_poly <- st_read(
-  conn,
-  query = "
-    SELECT gnis_name_1 as name,
-           ST_Transform(ST_Simplify(
-             ST_Intersection(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)),
-             500), 4326) as geom
-    FROM whse_basemapping.fwa_rivers_poly
-    WHERE gnis_name_1 IN (
-      'Nechako River', 'Fraser River', 'Skeena River',
-      'Bulkley River', 'Stuart River'
-    )
+# Database queries
+conn <- dbConnect(
+  RPostgres::Postgres(),
+  host = "localhost", port = 63333,
+  dbname = "bcfishpass", user = "newgraph"
+)
+
+rivers_poly <- st_read(conn, query = "
+  SELECT gnis_name_1 as name,
+         ST_Transform(ST_Simplify(
+           ST_Intersection(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)),
+           500), 4326) as geom
+  FROM whse_basemapping.fwa_rivers_poly
+  WHERE gnis_name_1 IN ('Nechako River', 'Fraser River', 'Skeena River', 'Bulkley River', 'Stuart River')
     AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005))
-  "
-)
+")
+st_write(rivers_poly, "data/rivers_poly.geojson", delete_dsn = TRUE)
 
-# Stream network lines — order >= 6 only, clipped, simplified
-streams <- st_read(
-  conn,
-  query = "
-    SELECT gnis_name as name, stream_order,
-           ST_Transform(ST_Simplify(geom, 1000), 4326) as geom
-    FROM whse_basemapping.fwa_stream_networks_sp
-    WHERE stream_order >= 7
-      AND ST_Intersects(
-        geom,
-        ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)
-      )
-  "
-)
-```
+streams <- st_read(conn, query = "
+  SELECT gnis_name as name, stream_order,
+         ST_Transform(ST_Simplify(geom, 1000), 4326) as geom
+  FROM whse_basemapping.fwa_stream_networks_sp
+  WHERE stream_order >= 7
+    AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005))
+")
+st_write(streams, "data/streams.geojson", delete_dsn = TRUE)
 
-```{r data-towns, include=FALSE}
-# Towns from BC Geographical Names
-towns <- st_read(
-  conn,
-  query = "
-    SELECT geographical_name as name, feature_type,
-           ST_Transform(geom, 4326) as geom
-    FROM whse_basemapping.gns_geographical_names_sp
-    WHERE geographical_name IN (
-      'Prince George', 'Mackenzie', 'Vanderhoof',
-      'Burns Lake', 'Houston', 'Smithers', 'Fort St. James'
-    )
-    AND feature_type IN (
-      'City', 'Town', 'Village (1)',
-      'District Municipality (1)', 'District Municipality'
-    )
-  "
-)
-```
+towns <- st_read(conn, query = "
+  SELECT geographical_name as name, feature_type,
+         ST_Transform(geom, 4326) as geom
+  FROM whse_basemapping.gns_geographical_names_sp
+  WHERE geographical_name IN (
+    'Prince George', 'Mackenzie', 'Vanderhoof',
+    'Burns Lake', 'Houston', 'Smithers', 'Fort St. James'
+  )
+  AND feature_type IN (
+    'City', 'Town', 'Village (1)',
+    'District Municipality (1)', 'District Municipality'
+  )
+")
+st_write(towns, "data/towns.geojson", delete_dsn = TRUE)
 
-```{r data-dam, include=FALSE}
-# Kenney Dam from bcfishpass dams table
-kenney_dam <- st_read(
-  conn,
-  query = "
-    SELECT dam_name_en as name, dam_use, owner,
-           ST_Transform(geom, 4326) as geom
-    FROM bcfishpass.dams
-    WHERE dam_name_en = 'Kenney Dam'
-  "
-)
-```
+kenney_dam <- st_read(conn, query = "
+  SELECT gnis_name as name, obstruction_type,
+         ST_Transform(geom, 4326) as geom
+  FROM whse_basemapping.fwa_obstructions_sp
+  WHERE gnis_name = 'Kenney Dam'
+")
+st_write(kenney_dam, "data/kenney_dam.geojson", delete_dsn = TRUE)
 
-```{r data-lakes, include=FALSE}
-# Major lakes — clipped to bbox, simplified, only large ones
-lakes <- st_read(
-  conn,
-  query = "
-    SELECT gnis_name_1 as name,
-           ST_Transform(ST_Simplify(geom, 1000), 4326) as geom,
-           area_ha
-    FROM whse_basemapping.fwa_lakes_poly
-    WHERE ST_Intersects(
-        geom,
-        ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005)
-      )
-      AND area_ha > 2000
-  "
-)
-```
+lakes <- st_read(conn, query = "
+  SELECT gnis_name_1 as name,
+         ST_Transform(ST_Simplify(geom, 1000), 4326) as geom, area_ha
+  FROM whse_basemapping.fwa_lakes_poly
+  WHERE ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(-127.5, 53, -122, 56.5, 4326), 3005))
+    AND area_ha > 2000
+")
+st_write(lakes, "data/lakes.geojson", delete_dsn = TRUE)
 
-```{r db-disconnect, include=FALSE}
+harvest_area <- st_read(conn, query = "
+  SELECT ST_Transform(ST_Buffer(ST_Union(geom), 2000), 4326) as geom
+  FROM whse_basemapping.fwa_stream_networks_sp
+  WHERE gnis_name = 'Nechako River' AND stream_order >= 5
+") |> st_make_valid()
+st_write(harvest_area, "data/harvest_area.geojson", delete_dsn = TRUE)
+
 dbDisconnect(conn)
 ```
 
-```{r map-study-area, fig.cap="Study area showing the Nechako River source region (between Prince George and Kenney Dam) and proposed transfer destinations in the Mackenzie and Skeena basins. BEC zones are shown as semi-transparent fills. Data: BC Freshwater Atlas, BC Geographical Names, CABD dams, BEC Map (BC Data Catalogue).", fig.height=7}
+```{r data-load, include=FALSE}
+# Load cached geojson
+bec <- st_read("data/bec.geojson", quiet = TRUE)
+rivers_poly <- st_read("data/rivers_poly.geojson", quiet = TRUE)
+streams <- st_read("data/streams.geojson", quiet = TRUE)
+towns <- st_read("data/towns.geojson", quiet = TRUE)
+kenney_dam <- st_read("data/kenney_dam.geojson", quiet = TRUE)
+lakes <- st_read("data/lakes.geojson", quiet = TRUE)
+harvest_area <- st_read("data/harvest_area.geojson", quiet = TRUE)
+
+# Planting areas — PSCIS crossing locations
+planting_sites <- st_as_sf(
+  data.frame(
+    name = c("Neexdzi Kwa", "Kerry Lake", "Nation River"),
+    lon = c(-126.4412, -122.8180, -124.1646),
+    lat = c(54.51688, 54.68099, 55.24526)
+  ),
+  coords = c("lon", "lat"),
+  crs = 4326
+)
+```
+
+```{r map-study-area, fig.cap="Study area showing the seed collection zone and proposed planting areas. Data: BC Freshwater Atlas, BC Geographical Names, BEC (BC Data Catalogue).", fig.height=7}
 # Named streams for labels (order >= 7, major rivers only)
 stream_labels <- streams |>
   filter(!is.na(name) & stream_order >= 7) |>
   group_by(name) |>
-  summarise(geom = st_union(geom), .groups = "drop") |>
+  summarise(geometry = st_union(geometry), .groups = "drop") |>
   st_point_on_surface()
 
 maplibre(
@@ -193,6 +190,20 @@ maplibre(
     line_color = reg$layers$bec_zone$stroke$color,
     line_width = reg$layers$bec_zone$stroke$width,
     line_opacity = reg$layers$bec_zone$stroke$opacity
+  ) |>
+  # Harvest area — Nechako corridor (seed collection zone)
+  add_fill_layer(
+    id = "harvest-area",
+    source = harvest_area,
+    fill_color = harvest_style$paint[["fill-color"]],
+    fill_opacity = harvest_style$paint[["fill-opacity"]]
+  ) |>
+  add_line_layer(
+    id = "harvest-area-border",
+    source = harvest_area,
+    line_color = reg$layers$harvest_area$stroke$color,
+    line_width = reg$layers$harvest_area$stroke$width,
+    line_opacity = reg$layers$harvest_area$stroke$opacity
   ) |>
   # Lakes
   add_fill_layer(
@@ -273,6 +284,27 @@ maplibre(
     text_font = list(reg$layers$dam$label$font),
     text_offset = c(reg$layers$dam$label$offset_x, reg$layers$dam$label$offset_y)
   ) |>
+  # Planting areas
+  add_circle_layer(
+    id = "planting-sites",
+    source = planting_sites,
+    circle_radius = planting_style$mark$radius,
+    circle_color = planting_style$mark$color,
+    circle_stroke_color = planting_style$mark$stroke_color,
+    circle_stroke_width = planting_style$mark$stroke_width
+  ) |>
+  add_symbol_layer(
+    id = "planting-labels",
+    source = planting_sites,
+    text_field = get_column("name"),
+    text_size = 9,
+    text_color = planting_style$label$color,
+    text_halo_color = planting_style$label$halo$color,
+    text_halo_width = 0.8,
+    text_font = list(planting_style$label$font),
+    text_offset = c(0, 1.2),
+    text_allow_overlap = FALSE
+  ) |>
   # Scale bar
   add_scale_control(
     position = "bottom-left",
@@ -280,7 +312,7 @@ maplibre(
   ) |>
   # Navigation
   add_navigation_control(position = "top-right") |>
-  # New Graph logo — upper left as north arrow stand-in
+  # New Graph logo — upper left
   add_control(
     html = paste0(
       '<img src="data:image/png;base64,',
@@ -288,6 +320,26 @@ maplibre(
       '" style="height: 45px; opacity: 0.85;">'
     ),
     position = "top-left"
+  ) |>
+  # Legend — circle for planting first (add=TRUE stacks above), square below
+  add_categorical_legend(
+    legend_title = "",
+    values = c("Seed collection zone"),
+    colors = c(harvest_style$paint[["fill-color"]]),
+    patch_shape = "square",
+    position = "top-left",
+    margin_top = 55,
+    style = legend_style(padding = 4)
+  ) |>
+  add_categorical_legend(
+    legend_title = "",
+    values = c("Planting area"),
+    colors = c(planting_style$mark$color),
+    patch_shape = "circle",
+    position = "top-left",
+    add = TRUE,
+    margin_top = 95,
+    style = legend_style(padding = 4)
   )
 ```
 
